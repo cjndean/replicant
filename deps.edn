@@ -1,0 +1,16 @@
+{:paths    ["src" "resources"]
+ :deps     {org.clojure/clojure    {:mvn/version "1.12.0"}
+            thheller/shadow-cljs   {:mvn/version "2.28.22"}
+            no.cjohansen/replicant {:mvn/version "2025.03.27"}
+            com.rpl/rama           {:mvn/version "1.0.0"}
+            com.rpl/rama-helpers   {:mvn/version "0.9.1"}
+            ring/ring              {:mvn/version "1.10.0"}
+            ring/ring-json         {:mvn/version "0.5.1"}
+            ring-cors/ring-cors    {:mvn/version "0.1.13"} 
+            com.domkm/silk         {:mvn/version "0.1.2"} 
+            lambdaisland/uri       {:mvn/version "1.19.155"}
+            }
+ :mvn/repos {"redplanetlabs"       {:url "https://nexus.redplanetlabs.com/repository/maven-public-releases"}}
+ :aliases  {:dev  {:extra-paths    ["dev" "test"]}
+            :test {:extra-paths    ["test"]}}}
+
