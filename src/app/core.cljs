@@ -42,7 +42,7 @@
 
 (defn query-backend [store query]
   (swap! store query/send-request (js/Date.) query)
-  (-> (js/fetch "http://localhost:3000/query" #js {:method "POST" 
+  (-> (js/fetch "http://localhost:3000/query" #js {:method "POST"
                                                    :body (pr-str query)})
       (.then #(.text %))
       (.then reader/read-string)
@@ -52,27 +52,28 @@
 (defn issue-command [store command & [{:keys [on-success]}]]
   (swap! store command/issue-command (js/Date.) command)
   (-> (js/fetch "http://localhost:3000/command" #js {:method "POST"
-                                :body (pr-str command)})
+                                                     :body (pr-str command)})
       (.then #(.text %))
       (.then reader/read-string)
       (.then (fn [res]
-               (swap! store command/receive-response
-                      (js/Date.) command res)
-               (when on-success
-                 (execute-actions store on-success))))
-      (.catch #(swap! store command/receive-response
-                      (js/Date.) command {:error (.-message %)}))))
+               (let [result (:result res)]
+                 (swap! store command/receive-response (js/Date.) command res)
+                 (when on-success (execute-actions store on-success result)))))
+      (.catch #(swap! store command/receive-response (js/Date.) command {:error (.-message %)}))))
 
+(defn redirect [url]
+  (set! js/location.href url))
 
-(defn execute-actions [store actions]
+(defn execute-actions [store actions & [command-result]]
   (doseq [[action & args] actions]
     (case action
       :store/assoc-in (apply swap! store assoc-in args)
-      :data/query (apply query-backend store args)
-      :data/command (apply issue-command store args)  
+      :data/query     (apply query-backend store args)
+      :data/command   (apply issue-command store args)
+      :app/redirect   (redirect command-result)
       (println "Unknown action" action "with arguments" args))))
 
-(def pages
+(def pages ; These need to be ordered by most to least specific route, due to how silk processes routes.
   [user/page
    frontpage/page])
 

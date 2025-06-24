@@ -24,13 +24,3 @@
      :on-load (fn [location]
                 [[:data/query (get-query location)]])
      :render #'render})
-
-
-
-
-
-
-
-
-
-

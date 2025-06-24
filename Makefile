@@ -5,7 +5,7 @@ shadow: node_modules
 	npx shadow-cljs watch app
 
 backend:
-	clj -M -m server.core
+	clj -M -m app.server
 
 dev: node_modules
 	npx shadow-cljs watch app & clj -M -m server.core

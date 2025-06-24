@@ -1,6 +1,26 @@
 (ns app.query)
 
+(comment "The query log used as the structure of all queries:"
 
+         {:query/log
+          {{:query/kind :query/user
+            :query/data {:user-id "alice"}}                             ;; 1
+           [{:query/status :query.status/success                        ;; 2
+             :query/result {:user/id "alice"                            ;; 3
+                            :user/given-name "Alice"
+                            :user/family-name "Johnson"
+                            :user/email "alice.johnson@acme-corp.com"}
+             :query/user-time #inst "2024-12-31T09:29:23.307-00:00"}    ;; 4
+            {:query/status :query.status/loading                        ;; 5
+             :query/user-time #inst "2024-12-31T09:29:23.142-00:00"}]}}
+
+         "This structure lets us write functions to answer these questions:
+          
+          1. Have we requested this piece of data? How long ago?
+          2. Is the data currently loading?
+          3. Is the data available?
+          4. Is the available data stale? (e.g. we have requested it again, but not received a response) 
+          5. Did we fail to fetch the data? Why?")
 
 (defn take-until [f xs]
   (loop [res []

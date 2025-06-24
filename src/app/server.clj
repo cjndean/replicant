@@ -2,10 +2,13 @@
   (:require [ring.adapter.jetty :as jetty]
             [ring.middleware.resource :refer [wrap-resource]]
             [ring.middleware.cors :refer [wrap-cors]]
+            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.session :refer [wrap-session]]
             [ring.util.response :as response]
             [clojure.string :as str]
             [app.rama.module :as module]
-            [app.rama.actions :as actions]))
+            [app.rama.actions :as actions]
+            [app.auth :as auth]))
 
 (defonce todos
   (atom
@@ -73,6 +76,16 @@
     :user/family-name "Lee"
     :user/email "carol.lee@acme-corp.com"}])
 
+(defn get-current-user [req]
+  (if-let [user-session (get-in req [:session :user])]
+    (let [user-id (get-in req [:session :user-id])
+          rama-user (actions/fetch-user user-id)
+          user (merge user-session rama-user {:user-id user-id})]
+      {:success? true
+       :result user})
+    {:success? false
+     :error "Not authenticated"}))
+
 (defn query [req]
   (if-let [query (try
                    (read-string (slurp (:body req)))
@@ -91,6 +104,19 @@
             {:success? true
              :result user}
             {:error "No such user"}))
+
+        :query/get-current-user
+        (get-current-user req)
+
+        :query/rama-user
+        (let [{:keys [user-id]} (:query/data query)]
+          (if-let [user (actions/fetch-user user-id)]
+            {:success? true
+             :result user}
+            {:error "No such user"}))
+
+
+
         {:error "Unknown query type"
          :query query})
       (catch Exception e
@@ -123,6 +149,18 @@
                      (update :todo/done? not)))))
   {:success? true})
 
+(defn get-login-link [req]
+  (let [auth-url (auth/get-auth-url)]
+    {:success? true
+     :result auth-url}))
+
+
+(defn logout-user [req]
+  {:success? true
+   :result "Logged out"
+   :session nil})
+
+
 (defn handle-command [req]
   (if-let [command (try
                      (read-string (slurp (:body req)))
@@ -130,15 +168,28 @@
                        (println "Failed to parse command body")
                        (prn e)))]
     (try
-      (case (:command/kind command)
-        :command/create-todo
-        (create-todo (:command/data command))
+      (let [result (case (:command/kind command)
+                     :command/create-todo
+                     (create-todo (:command/data command))
 
-        :command/toggle-todo
-        (toggle-todo (:command/data command))
+                     :command/toggle-todo
+                     (toggle-todo (:command/data command))
 
-        {:error "Unknown command type"
-         :command command})
+                     :command/get-login-link
+                     (get-login-link req)
+
+                     :command/get-current-user
+                     (get-current-user req)
+
+                     :command/logout
+                     (logout-user req)
+
+                     {:error "Unknown command type"
+                      :command command})]
+        ;; Handle session updates from commands like logout
+        (if (contains? result :session)
+          result
+          (assoc result :session (:session req))))
       (catch Exception e
         (println "Failed to handle command")
         (prn e)
@@ -146,7 +197,7 @@
     {:error "Unparsable command"}))
 
 
-(defn handler [{:keys [uri] :as req}]
+(defn handler [{:keys [uri params] :as req}]
   (cond
     (= "/" uri)
     (response/resource-response "/index.html" {:root "public"})
@@ -157,9 +208,14 @@
      :body (pr-str (query req))}
 
     (= "/command" uri)
-    {:status 200
-     :headers {"content-type" "application/edn"}
-     :body (pr-str (handle-command req))}
+    (let [result (handle-command req)]
+      {:status 200
+       :headers {"content-type" "application/edn"}
+       :body (pr-str (dissoc result :session))
+       :session (:session result)})
+
+    (= "/authentication/callback" uri)
+    (auth/authentication-callback-handler req)
 
     :else
     {:status 404
@@ -169,6 +225,8 @@
 (defn start-server [port]
   (jetty/run-jetty
    (-> #'handler
+       (wrap-params)
+       (wrap-session)
        (wrap-resource "public")
        (wrap-cors :access-control-allow-origin [#".*"]
                   :access-control-allow-methods [:get :post :options]
@@ -178,15 +236,18 @@
 (defn stop-server [server]
   (.stop server))
 
+(defn -main [& args]
+  (println "Initializing Rama...")
+  (module/init-rama!)
+  (println "Starting server on port 3000...")
+  (start-server 3000)
+  (println "Server started successfully!"))
+
 (comment
-  
+
   (module/init-rama!)
   (actions/register-user "123" "test@test.com")
   (module/shutdown-rama!)
 
   (def server (start-server 3000))
-  (stop-server server)
-  
-  
-  
-  )
+  (stop-server server))
